@@ -1,6 +1,6 @@
 // package resonant; // ← Uncomment and set your package if required by your project.
 
-/**
+/*
  * Resonant is a simple CLI chatbot that:
  * <ul>
  *   <li>Echoes and stores user inputs as tasks,</li>
