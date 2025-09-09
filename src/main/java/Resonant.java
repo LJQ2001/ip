@@ -23,75 +23,63 @@ import java.util.Scanner;
 
 public class Resonant {
 
-    /** Type of task. */
-    enum TaskType { TODO, DEADLINE, EVENT }
-
-    /**
-     * Represents a single task.
-     * TODO: description only
-     * DEADLINE: description + (by: <string>)
-     * EVENT: description + (from: <string> to: <string>)
-     */
+    // ===== Base class and subclasses (A-Inheritance) =====
     static class Task {
-        private final TaskType type;
-        private final String description;
-        private String by;      // for DEADLINE
-        private String from;    // for EVENT
-        private String to;      // for EVENT
-        private boolean isDone;
+        protected final String description;
+        protected boolean isDone;
 
-        /** Constructs a TODO task. */
         Task(String description) {
-            this.type = TaskType.TODO;
             this.description = description;
             this.isDone = false;
         }
 
-        /** Constructs a DEADLINE task. */
-        Task(String description, String by) {
-            this.type = TaskType.DEADLINE;
-            this.description = description;
-            this.by = by;
-            this.isDone = false;
-        }
-
-        /** Constructs an EVENT task. */
-        Task(String description, String from, String to) {
-            this.type = TaskType.EVENT;
-            this.description = description;
-            this.from = from;
-            this.to = to;
-            this.isDone = false;
-        }
-
-        /** Marks this task as done. */
         void mark() { this.isDone = true; }
-
-        /** Marks this task as not done. */
         void unmark() { this.isDone = false; }
 
-        /** Returns "X" if done, otherwise a single space. */
         String getStatusIcon() { return isDone ? "X" : " "; }
 
-        /** Returns the single-letter type icon [T]/[D]/[E]. */
-        String getTypeIcon() {
-            switch (type) {
-                case TODO: return "T";
-                case DEADLINE: return "D";
-                case EVENT: return "E";
-                default: return "?";
-            }
-        }
-
+        /** Base renders "[<status>] description". Subclasses prepend their type icon and optionally append details. */
         @Override
         public String toString() {
-            String base = "[" + getTypeIcon() + "][" + getStatusIcon() + "] " + description;
-            if (type == TaskType.DEADLINE) {
-                return base + " (by: " + by + ")";
-            } else if (type == TaskType.EVENT) {
-                return base + " (from: " + from + " to: " + to + ")";
-            }
-            return base;
+            return "[" + getStatusIcon() + "] " + description;
+        }
+    }
+
+    static class Todo extends Task {
+        Todo(String description) {
+            super(description);
+        }
+        @Override
+        public String toString() {
+            return "[T]" + super.toString();
+        }
+    }
+
+    static class Deadline extends Task {
+        protected final String by;
+
+        Deadline(String description, String by) {
+            super(description);
+            this.by = by;
+        }
+        @Override
+        public String toString() {
+            return "[D]" + super.toString() + " (by: " + by + ")";
+        }
+    }
+
+    static class Event extends Task {
+        protected final String from;
+        protected final String to;
+
+        Event(String description, String from, String to) {
+            super(description);
+            this.from = from;
+            this.to = to;
+        }
+        @Override
+        public String toString() {
+            return "[E]" + super.toString() + " (from: " + from + " to: " + to + ")";
         }
     }
 
@@ -139,7 +127,7 @@ public class Resonant {
             } else if (input.startsWith("todo ")) {
                 String desc = input.substring(5).trim();
                 if (!desc.isEmpty()) {
-                    addTask(new Task(desc));
+                    addTask(new Todo(desc));
                 } else {
                     box(" Please provide a description, e.g., todo borrow book");
                 }
@@ -152,7 +140,7 @@ public class Resonant {
 
             } else if (!input.isEmpty()) {
                 // Fallback: treat any other non-empty line as a ToDo for convenience
-                addTask(new Task(input));
+                addTask(new Todo(input));
             }
         }
 
@@ -173,7 +161,7 @@ public class Resonant {
             box(" Missing '/by'. Use e.g., deadline return book /by Sunday");
             return;
         }
-        addTask(new Task(desc, by));
+        addTask(new Deadline(desc, by));
     }
 
     /** Handle "event <desc> /from <start> /to <end>" */
@@ -197,7 +185,7 @@ public class Resonant {
             box(" Missing '/to'. Use e.g., event project meeting /from Mon 2pm /to 4pm");
             return;
         }
-        addTask(new Task(desc, from, to));
+        addTask(new Event(desc, from, to));
     }
 
     /**
@@ -215,19 +203,11 @@ public class Resonant {
 
     /** Finds the index of the keyword considering optional leading spaces before it. */
     private static int indexOfKeyword(String text, String keyword) {
-        // Look for "keyword" possibly preceded by spaces
-        // Normalize multiple spaces: we just search for the exact keyword ignoring surrounding spaces
         return text.indexOf(keyword);
     }
 
     /**
-     * Adds a task (any type), if capacity allows, and prints the standardized box:
-     *
-     *  ____________________________________________________________
-     *   Got it. I've added this task:
-     *     [T/D/E][ ] description (…)
-     *   Now you have N tasks in the list.
-     *  ____________________________________________________________
+     * Adds a task (any type), if capacity allows, and prints the standardized box.
      */
     private static void addTask(Task t) {
         if (taskCount >= 100) {
@@ -258,9 +238,6 @@ public class Resonant {
 
     /**
      * Handles mark N / unmark N
-     *
-     * @param input full user input (e.g., "mark 2")
-     * @param mark  true to mark, false to unmark
      */
     private static void handleMarkUnmark(String input, boolean mark) {
         String[] parts = input.split("\\s+", 2);
