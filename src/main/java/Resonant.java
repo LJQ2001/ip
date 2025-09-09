@@ -1,66 +1,33 @@
-/*
- * Resonant is a simple CLI chatbot that:
- * - Echoes and stores user inputs as tasks,
- * - Lists tasks with indices and status,
- * - Marks/unmarks tasks as done using commands "mark N" / "unmark N",
- * - Adds ToDos via "todo <desc>",
- * - Adds Deadlines via "deadline <desc> /by <when>",
- * - Adds Events via "event <desc> /from <start> /to <end>",
- * - Exits on "bye".
- *
- * Storage is an in-memory fixed-size array of up to 100 tasks.
- *
- * Notes on date/time:
- *   Dates/times are treated as plain strings (no parsing needed).
- *
- * Examples:
- *   todo borrow book
- *   deadline return book /by Sunday
- *   event project meeting /from Mon 2pm /to 4pm
- */
+// package resonant; // ← Uncomment and set your package if required by your project.
 
+/**
+ * Resonant is a simple CLI chatbot that:
+ * <ul>
+ *   <li>Echoes and stores user inputs as tasks,</li>
+ *   <li>Lists tasks with indices and status,</li>
+ *   <li>Marks/unmarks tasks as done using commands {@input mark N} / {@input unmark N},</li>
+ *   <li>Exits on bye.</li>
+ * </ul>
+ * <p>Storage is an in-memory fixed-size array of up to 100 tasks.</p>
+ */
 import java.util.Scanner;
 
 public class Resonant {
 
-    /** Type of task. */
-    enum TaskType { TODO, DEADLINE, EVENT }
-
     /**
-     * Represents a single task.
-     * TODO: description only
-     * DEADLINE: description + (by: <string>)
-     * EVENT: description + (from: <string> to: <string>)
+     * Represents a single to-do task with a description and done-state.
      */
     static class Task {
-        private final TaskType type;
         private final String description;
-        private String by;      // for DEADLINE
-        private String from;    // for EVENT
-        private String to;      // for EVENT
         private boolean isDone;
 
-        /** Constructs a TODO task. */
+        /**
+         * Constructs a task with the given description, initially not done.
+         *
+         * @param description the task description
+         */
         Task(String description) {
-            this.type = TaskType.TODO;
             this.description = description;
-            this.isDone = false;
-        }
-
-        /** Constructs a DEADLINE task. */
-        Task(String description, String by) {
-            this.type = TaskType.DEADLINE;
-            this.description = description;
-            this.by = by;
-            this.isDone = false;
-        }
-
-        /** Constructs an EVENT task. */
-        Task(String description, String from, String to) {
-            this.type = TaskType.EVENT;
-            this.description = description;
-            this.from = from;
-            this.to = to;
             this.isDone = false;
         }
 
@@ -73,25 +40,9 @@ public class Resonant {
         /** Returns "X" if done, otherwise a single space. */
         String getStatusIcon() { return isDone ? "X" : " "; }
 
-        /** Returns the single-letter type icon [T]/[D]/[E]. */
-        String getTypeIcon() {
-            switch (type) {
-                case TODO: return "T";
-                case DEADLINE: return "D";
-                case EVENT: return "E";
-                default: return "?";
-            }
-        }
-
         @Override
         public String toString() {
-            String base = "[" + getTypeIcon() + "][" + getStatusIcon() + "] " + description;
-            if (type == TaskType.DEADLINE) {
-                return base + " (by: " + by + ")";
-            } else if (type == TaskType.EVENT) {
-                return base + " (from: " + from + " to: " + to + ")";
-            }
-            return base;
+            return "[" + getStatusIcon() + "] " + description;
         }
     }
 
@@ -102,14 +53,11 @@ public class Resonant {
     /**
      * Runs the Resonant chatbot REPL until the user types "bye".
      *
-     * Supported commands:
+     * Supported commands :
      *   "list" – prints all tasks
      *   "mark N" – marks task N as done (1-based)
-     *   "unmark N" – marks task N as not done (1-based)
-     *   "todo <desc>" – adds a ToDo
-     *   "deadline <desc> /by <when>" – adds a Deadline
-     *   "event <desc> /from <start> /to <end>" – adds an Event
-     *   any other non-empty line – added as a ToDo (fallback)
+     *   "nmark N" – marks task N as not done (1-based)
+     *    any other non-empty line – added as a new task
      *   "bye" – exits
      */
     public static void main(String[] args) {
@@ -136,113 +84,29 @@ public class Resonant {
             } else if (input.startsWith("unmark ")) {
                 handleMarkUnmark(input, false);
 
-            } else if (input.startsWith("todo ")) {
-                String desc = input.substring(5).trim();
-                if (!desc.isEmpty()) {
-                    addTask(new Task(desc));
-                } else {
-                    box(" Please provide a description, e.g., todo borrow book");
-                }
-
-            } else if (input.startsWith("deadline ")) {
-                handleDeadline(input);
-
-            } else if (input.startsWith("event ")) {
-                handleEvent(input);
-
             } else if (!input.isEmpty()) {
-                // Fallback: treat any other non-empty line as a ToDo for convenience
-                addTask(new Task(input));
+                addTask(input);
             }
         }
 
         sc.close();
     }
 
-    /** Handle "deadline <desc> /by <when>" */
-    private static void handleDeadline(String input) {
-        String body = input.substring("deadline".length()).trim();
-        if (body.isEmpty()) {
-            box(" Please provide a description and /by, e.g., deadline return book /by Sunday");
-            return;
-        }
-        String[] split = splitOnKeyword(body, "/by");
-        String desc = split[0];
-        String by = split[1];
-        if (by == null) {
-            box(" Missing '/by'. Use e.g., deadline return book /by Sunday");
-            return;
-        }
-        addTask(new Task(desc, by));
-    }
-
-    /** Handle "event <desc> /from <start> /to <end>" */
-    private static void handleEvent(String input) {
-        String body = input.substring("event".length()).trim();
-        if (body.isEmpty()) {
-            box(" Please provide a description, /from and /to, e.g., event project meeting /from Mon 2pm /to 4pm");
-            return;
-        }
-        String[] splitFrom = splitOnKeyword(body, "/from");
-        String desc = splitFrom[0];
-        String fromPart = splitFrom[1];
-        if (fromPart == null) {
-            box(" Missing '/from'. Use e.g., event project meeting /from Mon 2pm /to 4pm");
-            return;
-        }
-        String[] splitTo = splitOnKeyword(fromPart, "/to");
-        String from = splitTo[0];
-        String to = splitTo[1];
-        if (to == null) {
-            box(" Missing '/to'. Use e.g., event project meeting /from Mon 2pm /to 4pm");
-            return;
-        }
-        addTask(new Task(desc, from, to));
-    }
-
     /**
-     * Splits a command body by the first occurrence of a keyword (case sensitive),
-     * returning a 2-element array: [leftTrimmed, rightTrimmedOrNull].
-     * E.g., splitOnKeyword("return book /by Sunday", "/by") -> ["return book", "Sunday"]
-     */
-    private static String[] splitOnKeyword(String text, String keyword) {
-        int idx = indexOfKeyword(text, keyword);
-        if (idx == -1) return new String[]{ text.trim(), null };
-        String left = text.substring(0, idx).trim();
-        String right = text.substring(idx + keyword.length()).trim();
-        return new String[]{ left, right };
-    }
-
-    /** Finds the index of the keyword considering optional leading spaces before it. */
-    private static int indexOfKeyword(String text, String keyword) {
-        // Look for "keyword" possibly preceded by spaces
-        // Normalize multiple spaces: we just search for the exact keyword ignoring surrounding spaces
-        return text.indexOf(keyword);
-    }
-
-    /**
-     * Adds a task (any type), if capacity allows, and prints the standardized box:
+     * Adds a task with the given description, if capacity allows.
      *
-     *  ____________________________________________________________
-     *   Got it. I've added this task:
-     *     [T/D/E][ ] description (…)
-     *   Now you have N tasks in the list.
-     *  ____________________________________________________________
+     * @param description the task description to add
      */
-    private static void addTask(Task t) {
+    private static void addTask(String description) {
         if (taskCount >= 100) {
             box(" Sorry, your task list is full (100 items).");
             return;
         }
-        tasks[taskCount++] = t;
-        box(
-                " Got it. I've added this task:",
-                "   " + t.toString(),
-                " Now you have " + taskCount + " " + (taskCount == 1 ? "task" : "tasks") + " in the list."
-        );
+        tasks[taskCount++] = new Task(description);
+        box(" added: " + description);
     }
 
-    /** Prints the current task list with indices and status/type icons. */
+    /** Prints the current task list with indices and status icons. */
     private static void printList() {
         if (taskCount == 0) {
             box(" Your list is empty.");
