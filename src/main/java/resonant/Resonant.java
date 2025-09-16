@@ -111,7 +111,7 @@ public class Resonant {
         } else if (input.startsWith(CMD_EVENT)) {
             return new Command(CommandType.EVENT, input.substring(CMD_EVENT.length()).trim());
         } else {
-            // Level 5: unknown commands are errors (do not auto-convert to todo)
+            // A-Exceptions: unknown commands are errors (do not auto-convert to todo)
             return new Command(CommandType.UNKNOWN, input);
         }
     }
@@ -138,111 +138,102 @@ public class Resonant {
 
     // ========================= Command Execution =========================
     private static void execute(Command cmd) {
-        switch (cmd.type()) {
-            case LIST -> printList();
-            case MARK -> handleMarkUnmark(cmd.arg(), true);
-            case UNMARK -> handleMarkUnmark(cmd.arg(), false);
-            case TODO -> handleTodo(cmd.arg());
-            case DEADLINE -> handleDeadline(cmd.arg());
-            case EVENT -> handleEvent(cmd.arg());
-            case UNKNOWN -> {
-                // Level 5: friendly error for unknown/empty commands
-                box(" Sorry, I don't recognise that command.",
-                        " Try one of: list | todo <desc> | deadline <desc> /by <when> | event <desc> /from <start> /to <end> | mark N | unmark N | bye");
+        try {
+            switch (cmd.type()) {
+                case LIST -> printList();
+                case MARK -> handleMarkUnmark(cmd.arg(), true);
+                case UNMARK -> handleMarkUnmark(cmd.arg(), false);
+                case TODO -> handleTodo(cmd.arg());
+                case DEADLINE -> handleDeadline(cmd.arg());
+                case EVENT -> handleEvent(cmd.arg());
+                case UNKNOWN -> {
+                    String unknown = cmd.arg() == null ? "" : (" '" + cmd.arg() + "'");
+                    throw new DukeException(
+                            "I don’t recognise that command" + unknown + ".\n" +
+                                    "Try: list | todo <desc> | deadline <desc> /by <when> | " +
+                                    "event <desc> /from <start> /to <end> | mark N | unmark N | bye"
+                    );
+                }
+                case BYE -> { /* handled in main */ }
             }
-            case BYE -> { /* handled in main */ }
+        } catch (DukeException e) {
+            box(" OOPS!!! " + e.getMessage());
         }
     }
 
     // ===== Command Handlers =====
-    private static void handleTodo(String desc) {
+    private static void handleTodo(String desc) throws DukeException {
         if (desc == null || desc.isEmpty()) {
-            // Level 5: explicit empty-description error
-            box(" Whoops — a todo needs a description.",
-                    " Example: todo borrow book");
-            return;
+            throw new DukeException("A todo needs a description. Usage: todo <desc>");
         }
         addTask(new Todo(desc));
     }
 
     /** Handle body of "deadline <desc> /by <when>" (body excludes the leading keyword). */
-    private static void handleDeadline(String body) {
+    private static void handleDeadline(String body) throws DukeException {
         if (body == null || body.isEmpty()) {
-            box(" Please provide a description and /by.",
-                    " Example: deadline return book /by Sunday");
-            return;
+            throw new DukeException("Deadline requires a description and '/by'. Usage: deadline <desc> /by <when>");
         }
         String[] split = splitOnKeyword(body, KW_BY);
         String desc = split[0];
         String by = split[1];
         if (by == null) {
-            box(" Missing '/by'.",
-                    " Example: deadline return book /by Sunday");
-            return;
+            throw new DukeException("Missing '/by'. Usage: deadline <desc> /by <when>");
         }
         if (desc.isEmpty()) {
-            box(" Deadline description cannot be empty.");
-            return;
+            throw new DukeException("Deadline description cannot be empty.");
         }
         addTask(new Deadline(desc, by));
     }
 
     /** Handle body of "event <desc> /from <start> /to <end>" (body excludes the leading keyword). */
-    private static void handleEvent(String body) {
+    private static void handleEvent(String body) throws DukeException {
         if (body == null || body.isEmpty()) {
-            box(" Please provide a description, /from and /to.",
-                    " Example: event project meeting /from Mon 2pm /to 4pm");
-            return;
+            throw new DukeException("Event requires a description, '/from', and '/to'. Usage: event <desc> /from <start> /to <end>");
         }
         String[] splitFrom = splitOnKeyword(body, KW_FROM);
         String desc = splitFrom[0];
         String fromPart = splitFrom[1];
         if (fromPart == null) {
-            box(" Missing '/from'.",
-                    " Example: event project meeting /from Mon 2pm /to 4pm");
-            return;
+            throw new DukeException("Missing '/from'. Usage: event <desc> /from <start> /to <end>");
         }
         String[] splitTo = splitOnKeyword(fromPart, KW_TO);
         String from = splitTo[0];
         String to = splitTo[1];
         if (to == null) {
-            box(" Missing '/to'.",
-                    " Example: event project meeting /from Mon 2pm /to 4pm");
-            return;
+            throw new DukeException("Missing '/to'. Usage: event <desc> /from <start> /to <end>");
         }
         if (desc.isEmpty()) {
-            box(" Event description cannot be empty.");
-            return;
+            throw new DukeException("Event description cannot be empty.");
         }
         if (from.isEmpty() || to.isEmpty()) {
-            box(" Please provide both start and end times for the event.");
-            return;
+            throw new DukeException("Please provide both start and end times. Example: event project /from Mon 2pm /to 4pm");
         }
         addTask(new Event(desc, from, to));
     }
 
     /** Handles both "mark N" and "unmark N" (N is 1-based). */
-    private static void handleMarkUnmark(String indexText, boolean mark) {
+    private static void handleMarkUnmark(String indexText, boolean mark) throws DukeException {
+        String action = mark ? "mark" : "unmark";
         if (indexText == null || indexText.isEmpty()) {
-            box(" Please provide a task number, e.g., " + (mark ? "mark 2" : "unmark 2"));
-            return;
+            throw new DukeException("Provide a task number. Usage: " + action + " N");
         }
+        final int idx;
         try {
-            int idx = Integer.parseInt(indexText);
-            if (idx < 1 || idx > taskCount) {
-                box(" Task number out of range. You have " + taskCount + " task(s).");
-                return;
-            }
-            Task t = tasks[idx - 1];
-            if (mark) {
-                t.mark();
-                box(" Nice! I've marked this task as done:", "   " + t);
-            } else {
-                t.unmark();
-                box(" OK, I've marked this task as not done yet:", "   " + t);
-            }
+            idx = Integer.parseInt(indexText);
         } catch (NumberFormatException e) {
-            box(" That doesn't look like a number. Use e.g., " + (mark ? "mark 2" : "unmark 2"));
+            throw new DukeException("Task number must be a positive integer. Example: " + action + " 2");
+        }
+        if (idx < 1 || idx > taskCount) {
+            throw new DukeException("Task number " + idx + " is out of range. You have " + taskCount + " task(s).");
+        }
+        Task t = tasks[idx - 1];
+        if (mark) {
+            t.mark();
+            box(" Nice! I've marked this task as done:", "   " + t);
+        } else {
+            t.unmark();
+            box(" OK, I've marked this task as not done yet:", "   " + t);
         }
     }
 
@@ -263,10 +254,9 @@ public class Resonant {
     }
 
     /** Adds a task (any type), if capacity allows, and prints the standardized box. */
-    private static void addTask(Task task) {
+    private static void addTask(Task task) throws DukeException {
         if (taskCount >= MAX_TASKS) {
-            box(" Sorry, your task list is full (" + MAX_TASKS + " items).");
-            return;
+            throw new DukeException("Your task list is full (" + MAX_TASKS + " items). Consider deleting some tasks.");
         }
         tasks[taskCount++] = task;
         box(
