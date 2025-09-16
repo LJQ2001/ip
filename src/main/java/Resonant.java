@@ -93,6 +93,9 @@ public class Resonant {
 
     /** Parses the raw input into a high-level command and its argument (if any). */
     private static Command parseCommand(String input) {
+        if (input == null || input.isBlank()) {
+            return new Command(CommandType.UNKNOWN, null);
+        }
         if (input.equals(CMD_BYE)) {
             return new Command(CommandType.BYE, null);
         } else if (input.equals(CMD_LIST)) {
@@ -107,11 +110,10 @@ public class Resonant {
             return new Command(CommandType.DEADLINE, input.substring(CMD_DEADLINE.length()).trim());
         } else if (input.startsWith(CMD_EVENT)) {
             return new Command(CommandType.EVENT, input.substring(CMD_EVENT.length()).trim());
-        } else if (!input.isEmpty()) {
-            // Fallback convenience: treat any other non-empty line as a ToDo
-            return new Command(CommandType.TODO, input);
+        } else {
+            // Level 5: unknown commands are errors (do not auto-convert to todo)
+            return new Command(CommandType.UNKNOWN, input);
         }
-        return new Command(CommandType.UNKNOWN, null);
     }
 
     // ========================= REPL =========================
@@ -143,7 +145,11 @@ public class Resonant {
             case TODO -> handleTodo(cmd.arg());
             case DEADLINE -> handleDeadline(cmd.arg());
             case EVENT -> handleEvent(cmd.arg());
-            case UNKNOWN -> { /* ignore empty/unknown input */ }
+            case UNKNOWN -> {
+                // Level 5: friendly error for unknown/empty commands
+                box(" Sorry, I don't recognise that command.",
+                        " Try one of: list | todo <desc> | deadline <desc> /by <when> | event <desc> /from <start> /to <end> | mark N | unmark N | bye");
+            }
             case BYE -> { /* handled in main */ }
         }
     }
@@ -151,7 +157,9 @@ public class Resonant {
     // ===== Command Handlers =====
     private static void handleTodo(String desc) {
         if (desc == null || desc.isEmpty()) {
-            box(" Please provide a description, e.g., todo borrow book");
+            // Level 5: explicit empty-description error
+            box(" Whoops — a todo needs a description.",
+                    " Example: todo borrow book");
             return;
         }
         addTask(new Todo(desc));
@@ -160,14 +168,20 @@ public class Resonant {
     /** Handle body of "deadline <desc> /by <when>" (body excludes the leading keyword). */
     private static void handleDeadline(String body) {
         if (body == null || body.isEmpty()) {
-            box(" Please provide a description and /by, e.g., deadline return book /by Sunday");
+            box(" Please provide a description and /by.",
+                    " Example: deadline return book /by Sunday");
             return;
         }
         String[] split = splitOnKeyword(body, KW_BY);
         String desc = split[0];
         String by = split[1];
         if (by == null) {
-            box(" Missing '/by'. Use e.g., deadline return book /by Sunday");
+            box(" Missing '/by'.",
+                    " Example: deadline return book /by Sunday");
+            return;
+        }
+        if (desc.isEmpty()) {
+            box(" Deadline description cannot be empty.");
             return;
         }
         addTask(new Deadline(desc, by));
@@ -176,21 +190,32 @@ public class Resonant {
     /** Handle body of "event <desc> /from <start> /to <end>" (body excludes the leading keyword). */
     private static void handleEvent(String body) {
         if (body == null || body.isEmpty()) {
-            box(" Please provide a description, /from and /to, e.g., event project meeting /from Mon 2pm /to 4pm");
+            box(" Please provide a description, /from and /to.",
+                    " Example: event project meeting /from Mon 2pm /to 4pm");
             return;
         }
         String[] splitFrom = splitOnKeyword(body, KW_FROM);
         String desc = splitFrom[0];
         String fromPart = splitFrom[1];
         if (fromPart == null) {
-            box(" Missing '/from'. Use e.g., event project meeting /from Mon 2pm /to 4pm");
+            box(" Missing '/from'.",
+                    " Example: event project meeting /from Mon 2pm /to 4pm");
             return;
         }
         String[] splitTo = splitOnKeyword(fromPart, KW_TO);
         String from = splitTo[0];
         String to = splitTo[1];
         if (to == null) {
-            box(" Missing '/to'. Use e.g., event project meeting /from Mon 2pm /to 4pm");
+            box(" Missing '/to'.",
+                    " Example: event project meeting /from Mon 2pm /to 4pm");
+            return;
+        }
+        if (desc.isEmpty()) {
+            box(" Event description cannot be empty.");
+            return;
+        }
+        if (from.isEmpty() || to.isEmpty()) {
+            box(" Please provide both start and end times for the event.");
             return;
         }
         addTask(new Event(desc, from, to));
@@ -217,7 +242,7 @@ public class Resonant {
                 box(" OK, I've marked this task as not done yet:", "   " + t);
             }
         } catch (NumberFormatException e) {
-            box(" Invalid number. Use e.g., " + (mark ? "mark 2" : "unmark 2"));
+            box(" That doesn't look like a number. Use e.g., " + (mark ? "mark 2" : "unmark 2"));
         }
     }
 
