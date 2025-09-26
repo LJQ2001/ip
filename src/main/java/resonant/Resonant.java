@@ -1,8 +1,3 @@
-//
-// Source code recreated from a .class file by IntelliJ IDEA
-// (powered by FernFlower decompiler)
-//
-
 package resonant;
 
 import java.io.IOException;
@@ -10,12 +5,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List; // only for loading/saving buffers
+import java.util.ArrayList; // for save buffers
+import java.util.List;     // for save buffers
 import java.util.Scanner;
 
 public class Resonant {
     private static final int MAX_TASKS = 100;
+
+    // Commands
     private static final String CMD_BYE = "bye";
     private static final String CMD_LIST = "list";
     private static final String CMD_MARK = "mark ";
@@ -23,60 +20,65 @@ public class Resonant {
     private static final String CMD_TODO = "todo ";
     private static final String CMD_DEADLINE = "deadline ";
     private static final String CMD_EVENT = "event ";
+    private static final String CMD_DELETE = "delete ";
 
+    // Keywords
     private static final String KW_BY = "/by";
     private static final String KW_FROM = "/from";
     private static final String KW_TO = "/to";
 
-    // === Level-7: Save (paths) ===
+    // Level 7: Save paths (relative + OS-independent)
     private static final Path DATA_DIR = Paths.get("data");
     private static final Path DATA_FILE = DATA_DIR.resolve("resonant.txt");
 
-    private static final Task[] tasks = new Task[100];
+    // Storage (array-based)
+    private static final Task[] tasks = new Task[MAX_TASKS];
     private static int taskCount = 0;
 
     private static Command parseCommand(String input) {
         if (input != null && !input.isBlank()) {
-            if (input.equals("bye")) {
-                return new Command(Resonant.CommandType.BYE, (String)null);
-            } else if (input.equals("list")) {
-                return new Command(Resonant.CommandType.LIST, (String)null);
-            } else if (input.startsWith("mark ")) {
-                return new Command(Resonant.CommandType.MARK, input.substring("mark ".length()).trim());
-            } else if (input.startsWith("unmark ")) {
-                return new Command(Resonant.CommandType.UNMARK, input.substring("unmark ".length()).trim());
-            } else if (input.startsWith("todo ")) {
-                return new Command(Resonant.CommandType.TODO, input.substring("todo ".length()).trim());
-            } else if (input.startsWith("deadline ")) {
-                return new Command(Resonant.CommandType.DEADLINE, input.substring("deadline ".length()).trim());
+            if (input.equals(CMD_BYE)) {
+                return new Command(CommandType.BYE, null);
+            } else if (input.equals(CMD_LIST)) {
+                return new Command(CommandType.LIST, null);
+            } else if (input.startsWith(CMD_MARK)) {
+                return new Command(CommandType.MARK, input.substring(CMD_MARK.length()).trim());
+            } else if (input.startsWith(CMD_UNMARK)) {
+                return new Command(CommandType.UNMARK, input.substring(CMD_UNMARK.length()).trim());
+            } else if (input.startsWith(CMD_TODO)) {
+                return new Command(CommandType.TODO, input.substring(CMD_TODO.length()).trim());
+            } else if (input.startsWith(CMD_DEADLINE)) {
+                return new Command(CommandType.DEADLINE, input.substring(CMD_DEADLINE.length()).trim());
+            } else if (input.startsWith(CMD_EVENT)) {
+                return new Command(CommandType.EVENT, input.substring(CMD_EVENT.length()).trim());
+            } else if (input.startsWith(CMD_DELETE)) {
+                return new Command(CommandType.DELETE, input.substring(CMD_DELETE.length()).trim());
             } else {
-                return input.startsWith("event ") ? new Command(Resonant.CommandType.EVENT, input.substring("event ".length()).trim()) : new Command(Resonant.CommandType.UNKNOWN, input);
+                return new Command(CommandType.UNKNOWN, input);
             }
         } else {
-            return new Command(Resonant.CommandType.UNKNOWN, (String)null);
+            return new Command(CommandType.UNKNOWN, null);
         }
     }
 
     public static void main(String[] args) {
-        // Level-7: load previous session first
+        // Level 7: Load tasks before greeting
         try {
             loadTasks();
         } catch (IOException e) {
-            // Non-fatal: start with empty list if load fails
             box(" OOPS!!! Couldn't load saved tasks. Starting fresh.");
         }
 
         greet();
 
         try (Scanner scanner = new Scanner(System.in)) {
-            while(true) {
+            while (true) {
                 String input = scanner.nextLine().trim();
                 Command cmd = parseCommand(input);
-                if (cmd.type() == Resonant.CommandType.BYE) {
+                if (cmd.type() == CommandType.BYE) {
                     box(" Bye. Hope to see you again soon!");
                     return;
                 }
-
                 execute(cmd);
             }
         }
@@ -84,40 +86,36 @@ public class Resonant {
 
     private static void execute(Command cmd) {
         try {
-            switch (cmd.type().ordinal()) {
-                case 0:
-                    printList();
-                    break;
-                case 1:
-                    handleMarkUnmark(cmd.arg(), true);
-                    break;
-                case 2:
-                    handleMarkUnmark(cmd.arg(), false);
-                    break;
-                case 3:
-                    handleTodo(cmd.arg());
-                    break;
-                case 4:
-                    handleDeadline(cmd.arg());
-                    break;
-                case 5:
-                    handleEvent(cmd.arg());
-                case 6:
-                default:
-                    break;
-                case 7:
+            // Use enum-based switch (safe when adding commands)
+            switch (cmd.type()) {
+                case LIST -> printList();
+                case MARK -> handleMarkUnmark(cmd.arg(), true);
+                case UNMARK -> handleMarkUnmark(cmd.arg(), false);
+                case TODO -> handleTodo(cmd.arg());
+                case DEADLINE -> handleDeadline(cmd.arg());
+                case EVENT -> handleEvent(cmd.arg());
+                case DELETE -> handleDelete(cmd.arg());
+                case UNKNOWN -> {
                     String unknown = cmd.arg() == null ? "" : " '" + cmd.arg() + "'";
-                    throw new DukeException("I don’t recognise that command" + unknown + ".\nTry: list | todo <desc> | deadline <desc> /by <when> | event <desc> /from <start> /to <end> | mark N | unmark N | bye");
+                    throw new DukeException(
+                            "I don’t recognise that command" + unknown + ".\n" +
+                                    "Try: list | todo <desc> | deadline <desc> /by <when> | " +
+                                    "event <desc> /from <start> /to <end> | mark N | unmark N | delete N | bye"
+                    );
+                }
+                case BYE -> { /* handled in main loop */ }
             }
         } catch (DukeException e) {
             box(" OOPS!!! " + e.getMessage());
         }
-
     }
+
+    // ===== Handlers =====
 
     private static void handleTodo(String desc) throws DukeException {
         if (desc != null && !desc.isEmpty()) {
             addTask(new Todo(desc));
+            try { saveTasks(); } catch (IOException ignored) {}
         } else {
             throw new DukeException("A todo needs a description. Usage: todo <desc>");
         }
@@ -125,7 +123,7 @@ public class Resonant {
 
     private static void handleDeadline(String body) throws DukeException {
         if (body != null && !body.isEmpty()) {
-            String[] split = splitOnKeyword(body, "/by");
+            String[] split = splitOnKeyword(body, KW_BY);
             String desc = split[0];
             String by = split[1];
             if (by == null) {
@@ -134,6 +132,7 @@ public class Resonant {
                 throw new DukeException("Deadline description cannot be empty.");
             } else {
                 addTask(new Deadline(desc, by));
+                try { saveTasks(); } catch (IOException ignored) {}
             }
         } else {
             throw new DukeException("Deadline requires a description and '/by'. Usage: deadline <desc> /by <when>");
@@ -142,13 +141,13 @@ public class Resonant {
 
     private static void handleEvent(String body) throws DukeException {
         if (body != null && !body.isEmpty()) {
-            String[] splitFrom = splitOnKeyword(body, "/from");
+            String[] splitFrom = splitOnKeyword(body, KW_FROM);
             String desc = splitFrom[0];
             String fromPart = splitFrom[1];
             if (fromPart == null) {
                 throw new DukeException("Missing '/from'. Usage: event <desc> /from <start> /to <end>");
             } else {
-                String[] splitTo = splitOnKeyword(fromPart, "/to");
+                String[] splitTo = splitOnKeyword(fromPart, KW_TO);
                 String from = splitTo[0];
                 String to = splitTo[1];
                 if (to == null) {
@@ -157,6 +156,7 @@ public class Resonant {
                     throw new DukeException("Event description cannot be empty.");
                 } else if (!from.isEmpty() && !to.isEmpty()) {
                     addTask(new Event(desc, from, to));
+                    try { saveTasks(); } catch (IOException ignored) {}
                 } else {
                     throw new DukeException("Please provide both start and end times. Example: event project /from Mon 2pm /to 4pm");
                 }
@@ -168,32 +168,67 @@ public class Resonant {
 
     private static void handleMarkUnmark(String indexText, boolean mark) throws DukeException {
         String action = mark ? "mark" : "unmark";
-        if (indexText != null && !indexText.isEmpty()) {
-            int idx;
-            try {
-                idx = Integer.parseInt(indexText);
-            } catch (NumberFormatException var5) {
-                throw new DukeException("Task number must be a positive integer. Example: " + action + " 2");
-            }
-
-            if (idx >= 1 && idx <= taskCount) {
-                Task t = tasks[idx - 1];
-                if (mark) {
-                    t.mark();
-                    box(" Nice! I've marked this task as done:", "   " + String.valueOf(t));
-                } else {
-                    t.unmark();
-                    box(" OK, I've marked this task as not done yet:", "   " + String.valueOf(t));
-                }
-                // Level-7: save on change
-                try { saveTasks(); } catch (IOException ignored) { }
-            } else {
-                throw new DukeException("Task number " + idx + " is out of range. You have " + taskCount + " task(s).");
-            }
-        } else {
+        if (indexText == null || indexText.isEmpty()) {
             throw new DukeException("Provide a task number. Usage: " + action + " N");
         }
+
+        int idx;
+        try {
+            idx = Integer.parseInt(indexText);
+        } catch (NumberFormatException e) {
+            throw new DukeException("Task number must be a positive integer. Example: " + action + " 2");
+        }
+
+        if (idx < 1 || idx > taskCount) {
+            throw new DukeException("Task number " + idx + " is out of range. You have " + taskCount + " task(s).");
+        }
+
+        Task t = tasks[idx - 1];
+        if (mark) {
+            t.mark();
+            box(" Nice! I've marked this task as done:", "   " + t);
+        } else {
+            t.unmark();
+            box(" OK, I've marked this task as not done yet:", "   " + t);
+        }
+        try { saveTasks(); } catch (IOException ignored) {}
     }
+
+    // Level 6: Delete
+    private static void handleDelete(String indexText) throws DukeException {
+        if (indexText == null || indexText.isEmpty()) {
+            throw new DukeException("Provide a task number. Usage: delete N");
+        }
+
+        int idx;
+        try {
+            idx = Integer.parseInt(indexText);
+        } catch (NumberFormatException e) {
+            throw new DukeException("Task number must be a positive integer. Example: delete 3");
+        }
+
+        if (idx < 1 || idx > taskCount) {
+            throw new DukeException("Task number " + idx + " is out of range. You have " + taskCount + " task(s).");
+        }
+
+        Task removed = tasks[idx - 1];
+
+        // Shift left to fill the gap
+        for (int i = idx; i < taskCount; i++) {
+            tasks[i - 1] = tasks[i];
+        }
+        tasks[--taskCount] = null; // clear last slot
+
+        box(
+                " Noted. I've removed this task:",
+                "   " + removed,
+                " Now you have " + taskCount + " " + (taskCount == 1 ? "task" : "tasks") + " in the list."
+        );
+
+        try { saveTasks(); } catch (IOException ignored) {}
+    }
+
+    // ===== Helpers =====
 
     private static void greet() {
         box(" Hello! I'm Resonant", " What can I do for you?");
@@ -211,15 +246,15 @@ public class Resonant {
     }
 
     private static void addTask(Task task) throws DukeException {
-        if (taskCount >= 100) {
+        if (taskCount >= MAX_TASKS) {
             throw new DukeException("Your task list is full (100 items). Consider deleting some tasks.");
         } else {
             tasks[taskCount++] = task;
-            box(" Got it. I've added this task:",
+            box(
+                    " Got it. I've added this task:",
                     "   " + task,
-                    " Now you have " + taskCount + " " + (taskCount == 1 ? "task" : "tasks") + " in the list.");
-            // Level-7: save on change
-            try { saveTasks(); } catch (IOException ignored) { }
+                    " Now you have " + taskCount + " " + (taskCount == 1 ? "task" : "tasks") + " in the list."
+            );
         }
     }
 
@@ -229,31 +264,26 @@ public class Resonant {
         } else {
             StringBuilder sb = new StringBuilder();
             sb.append(" Here are the tasks in your list:");
-
-            for(int i = 0; i < taskCount; ++i) {
+            for (int i = 0; i < taskCount; ++i) {
                 sb.append('\n').append(' ').append(i + 1).append('.').append(tasks[i]);
             }
-
             box(sb.toString());
         }
     }
 
     private static void box(String... lines) {
         System.out.println("____________________________________________________________");
-
-        for(String line : lines) {
+        for (String line : lines) {
             System.out.println(line);
         }
-
         System.out.println("____________________________________________________________");
     }
 
     // =========================
-    // Level-7: Save / Load
+    // Level 7: Save / Load
     // =========================
 
     private static void saveTasks() throws IOException {
-        // Ensure folder exists
         if (Files.notExists(DATA_DIR)) {
             Files.createDirectories(DATA_DIR);
         }
@@ -261,26 +291,17 @@ public class Resonant {
         List<String> lines = new ArrayList<>(taskCount);
         for (int i = 0; i < taskCount; i++) {
             Task t = tasks[i];
-            String type, rest;
             boolean done = t.isDone;
 
             if (t instanceof Todo) {
-                type = "T";
-                rest = t.description;
-                lines.add(String.join(" | ", type, done ? "1" : "0", rest));
+                lines.add(String.join(" | ", "T", done ? "1" : "0", t.description));
             } else if (t instanceof Deadline d) {
-                type = "D";
-                rest = t.description + " | " + d.by;
-                lines.add(String.join(" | ", type, done ? "1" : "0", rest));
+                lines.add(String.join(" | ", "D", done ? "1" : "0", d.description, d.by));
             } else if (t instanceof Event e) {
-                type = "E";
-                rest = t.description + " | " + e.from + " | " + e.to;
-                lines.add(String.join(" | ", type, done ? "1" : "0", rest));
+                lines.add(String.join(" | ", "E", done ? "1" : "0", e.description, e.from, e.to));
             } else {
-                // Unknown subtype fallback
-                type = "T";
-                rest = t.description;
-                lines.add(String.join(" | ", type, done ? "1" : "0", rest));
+                // fallback (shouldn't happen)
+                lines.add(String.join(" | ", "T", done ? "1" : "0", t.description));
             }
         }
 
@@ -289,34 +310,28 @@ public class Resonant {
 
     private static void loadTasks() throws IOException {
         if (Files.notExists(DATA_FILE)) {
-            // First run: no file yet — make sure directory exists for later saves
             if (Files.notExists(DATA_DIR)) {
                 Files.createDirectories(DATA_DIR);
             }
-            return;
+            return; // first run: nothing to load
         }
 
         List<String> lines = Files.readAllLines(DATA_FILE, StandardCharsets.UTF_8);
-        taskCount = 0; // reset before loading
+        taskCount = 0;
 
         for (String raw : lines) {
             String line = raw.trim();
             if (line.isEmpty()) continue;
 
-            // Expected:
+            // Expected formats:
             // T | 1 | desc
             // D | 0 | desc | by
             // E | 1 | desc | from | to
             String[] parts = line.split("\\|");
-            // Basic corruption guard
-            if (parts.length < 3) {
-                // skip corrupted line
-                continue;
-            }
+            if (parts.length < 3) continue; // corrupted, skip
 
             String type = parts[0].trim();
-            String doneStr = parts[1].trim();
-            boolean done = "1".equals(doneStr);
+            boolean done = "1".equals(parts[1].trim());
 
             try {
                 switch (type) {
@@ -349,16 +364,15 @@ public class Resonant {
                     }
                     default:
                         // unknown type — skip
-                        break;
                 }
             } catch (Exception ignored) {
-                // skip corrupted/malformed line (stretch goal handling)
+                // skip malformed lines gracefully
             }
         }
     }
 
     private static String joinRest(String[] parts, int start) {
-        // Re-join with '|' to preserve user-entered separators inside fields
+        // Re-join with " | " to preserve user-entered separators
         StringBuilder sb = new StringBuilder();
         for (int i = start; i < parts.length; i++) {
             if (i > start) sb.append(" | ");
@@ -380,32 +394,22 @@ public class Resonant {
             this.isDone = false;
         }
 
-        void mark() {
-            this.isDone = true;
-        }
+        void mark() { this.isDone = true; }
+        void unmark() { this.isDone = false; }
 
-        void unmark() {
-            this.isDone = false;
-        }
+        String getStatusIcon() { return this.isDone ? "X" : " "; }
 
-        String getStatusIcon() {
-            return this.isDone ? "X" : " ";
-        }
-
+        @Override
         public String toString() {
-            String var10000 = this.getStatusIcon();
-            return "[" + var10000 + "] " + this.description;
+            return "[" + getStatusIcon() + "] " + this.description;
         }
     }
 
     static class Todo extends Task {
-        Todo(String description) {
-            super(description);
-        }
+        Todo(String description) { super(description); }
 
-        public String toString() {
-            return "[T]" + super.toString();
-        }
+        @Override
+        public String toString() { return "[T]" + super.toString(); }
     }
 
     static class Deadline extends Task {
@@ -416,9 +420,9 @@ public class Resonant {
             this.by = by;
         }
 
+        @Override
         public String toString() {
-            String var10000 = super.toString();
-            return "[D]" + var10000 + " (by: " + this.by + ")";
+            return "[D]" + super.toString() + " (by: " + this.by + ")";
         }
     }
 
@@ -432,9 +436,9 @@ public class Resonant {
             this.to = to;
         }
 
+        @Override
         public String toString() {
-            String var10000 = super.toString();
-            return "[E]" + var10000 + " (from: " + this.from + " to: " + this.to + ")";
+            return "[E]" + super.toString() + " (from: " + this.from + " to: " + this.to + ")";
         }
     }
 
@@ -445,10 +449,10 @@ public class Resonant {
         TODO,
         DEADLINE,
         EVENT,
+        DELETE,
         BYE,
         UNKNOWN;
     }
 
-    private static record Command(CommandType type, String arg) {
-    }
+    private static record Command(CommandType type, String arg) { }
 }
