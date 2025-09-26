@@ -1,15 +1,10 @@
-//
-// Source code recreated from a .class file by IntelliJ IDEA
-// (powered by FernFlower decompiler)
-//
-
 package resonant;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 
 public class Resonant {
-    private static final int MAX_TASKS = 100;
-
     // Commands
     private static final String CMD_BYE = "bye";
     private static final String CMD_LIST = "list";
@@ -25,9 +20,8 @@ public class Resonant {
     private static final String KW_FROM = "/from";
     private static final String KW_TO = "/to";
 
-    // Storage
-    private static final Task[] tasks = new Task[MAX_TASKS];
-    private static int taskCount = 0;
+    // Storage with Collections
+    private static final List<Task> tasks = new ArrayList<>();
 
     private static Command parseCommand(String input) {
         if (input != null && !input.isBlank()) {
@@ -160,17 +154,17 @@ public class Resonant {
                 throw new DukeException("Task number must be a positive integer. Example: " + action + " 2");
             }
 
-            if (idx >= 1 && idx <= taskCount) {
-                Task t = tasks[idx - 1];
+            if (idx >= 1 && idx <= tasks.size()) {
+                Task t = tasks.get(idx - 1);
                 if (mark) {
                     t.mark();
-                    box(" Nice! I've marked this task as done:", "   " + String.valueOf(t));
+                    box(" Nice! I've marked this task as done:", "   " + t);
                 } else {
                     t.unmark();
-                    box(" OK, I've marked this task as not done yet:", "   " + String.valueOf(t));
+                    box(" OK, I've marked this task as not done yet:", "   " + t);
                 }
             } else {
-                throw new DukeException("Task number " + idx + " is out of range. You have " + taskCount + " task(s).");
+                throw new DukeException("Task number " + idx + " is out of range. You have " + tasks.size() + " task(s).");
             }
         } else {
             throw new DukeException("Provide a task number. Usage: " + action + " N");
@@ -189,22 +183,16 @@ public class Resonant {
             throw new DukeException("Task number must be a positive integer. Example: delete 3");
         }
 
-        if (idx < 1 || idx > taskCount) {
-            throw new DukeException("Task number " + idx + " is out of range. You have " + taskCount + " task(s).");
+        if (idx < 1 || idx > tasks.size()) {
+            throw new DukeException("Task number " + idx + " is out of range. You have " + tasks.size() + " task(s).");
         }
 
-        Task removed = tasks[idx - 1];
-
-        // Shift left to fill gap
-        for (int i = idx; i < taskCount; i++) {
-            tasks[i - 1] = tasks[i];
-        }
-        tasks[--taskCount] = null; // clear last slot
+        Task removed = tasks.remove(idx - 1);
 
         box(
                 " Noted. I've removed this task:",
-                "   " + String.valueOf(removed),
-                " Now you have " + taskCount + " " + (taskCount == 1 ? "task" : "tasks") + " in the list."
+                "   " + removed,
+                " Now you have " + tasks.size() + " " + (tasks.size() == 1 ? "task" : "tasks") + " in the list."
         );
     }
 
@@ -223,27 +211,23 @@ public class Resonant {
         }
     }
 
-    private static void addTask(Task task) throws DukeException {
-        if (taskCount >= MAX_TASKS) {
-            throw new DukeException("Your task list is full (100 items). Consider deleting some tasks.");
-        } else {
-            tasks[taskCount++] = task;
-            box(
-                    " Got it. I've added this task:",
-                    "   " + String.valueOf(task),
-                    " Now you have " + taskCount + " " + (taskCount == 1 ? "task" : "tasks") + " in the list."
-            );
-        }
+    private static void addTask(Task task) {
+        tasks.add(task);
+        box(
+                " Got it. I've added this task:",
+                "   " + task,
+                " Now you have " + tasks.size() + " " + (tasks.size() == 1 ? "task" : "tasks") + " in the list."
+        );
     }
 
     private static void printList() {
-        if (taskCount == 0) {
+        if (tasks.isEmpty()) {
             box(" Your list is empty.");
         } else {
             StringBuilder sb = new StringBuilder();
             sb.append(" Here are the tasks in your list:");
-            for (int i = 0; i < taskCount; ++i) {
-                sb.append('\n').append(' ').append(i + 1).append('.').append(tasks[i]);
+            for (int i = 0; i < tasks.size(); ++i) {
+                sb.append("\n ").append(i + 1).append('.').append(tasks.get(i));
             }
             box(sb.toString());
         }
@@ -268,13 +252,8 @@ public class Resonant {
             this.isDone = false;
         }
 
-        void mark() {
-            this.isDone = true;
-        }
-
-        void unmark() {
-            this.isDone = false;
-        }
+        void mark() { this.isDone = true; }
+        void unmark() { this.isDone = false; }
 
         String getStatusIcon() {
             return this.isDone ? "X" : " ";
@@ -287,9 +266,7 @@ public class Resonant {
     }
 
     static class Todo extends Task {
-        Todo(String description) {
-            super(description);
-        }
+        Todo(String description) { super(description); }
 
         @Override
         public String toString() {
@@ -340,11 +317,4 @@ public class Resonant {
     }
 
     private static record Command(CommandType type, String arg) { }
-
-    // Small checked exception so this file compiles standalone
-    private static class DukeException extends Exception {
-        DukeException(String message) {
-            super(message);
-        }
-    }
 }
