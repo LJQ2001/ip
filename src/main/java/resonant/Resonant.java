@@ -1,10 +1,17 @@
 package resonant;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList; // for save buffers
+import java.util.List;     // for save buffers
 import java.util.Scanner;
 
 public class Resonant {
+    private static final int MAX_TASKS = 100;
+
     // Commands
     private static final String CMD_BYE = "bye";
     private static final String CMD_LIST = "list";
@@ -20,8 +27,13 @@ public class Resonant {
     private static final String KW_FROM = "/from";
     private static final String KW_TO = "/to";
 
-    // Storage with Collections
-    private static final List<Task> tasks = new ArrayList<>();
+    // Level 7: Save paths (relative + OS-independent)
+    private static final Path DATA_DIR = Paths.get("data");
+    private static final Path DATA_FILE = DATA_DIR.resolve("resonant.txt");
+
+    // Storage (array-based)
+    private static final Task[] tasks = new Task[MAX_TASKS];
+    private static int taskCount = 0;
 
     private static Command parseCommand(String input) {
         if (input != null && !input.isBlank()) {
@@ -50,6 +62,13 @@ public class Resonant {
     }
 
     public static void main(String[] args) {
+        // Level 7: Load tasks before greeting
+        try {
+            loadTasks();
+        } catch (IOException e) {
+            box(" OOPS!!! Couldn't load saved tasks. Starting fresh.");
+        }
+
         greet();
 
         try (Scanner scanner = new Scanner(System.in)) {
@@ -60,7 +79,6 @@ public class Resonant {
                     box(" Bye. Hope to see you again soon!");
                     return;
                 }
-
                 execute(cmd);
             }
         }
@@ -68,6 +86,7 @@ public class Resonant {
 
     private static void execute(Command cmd) {
         try {
+            // Use enum-based switch (safe when adding commands)
             switch (cmd.type()) {
                 case LIST -> printList();
                 case MARK -> handleMarkUnmark(cmd.arg(), true);
@@ -84,18 +103,19 @@ public class Resonant {
                                     "event <desc> /from <start> /to <end> | mark N | unmark N | delete N | bye"
                     );
                 }
-                default -> {
-                    // no-op
-                }
+                case BYE -> { /* handled in main loop */ }
             }
         } catch (DukeException e) {
             box(" OOPS!!! " + e.getMessage());
         }
     }
 
+    // ===== Handlers =====
+
     private static void handleTodo(String desc) throws DukeException {
         if (desc != null && !desc.isEmpty()) {
             addTask(new Todo(desc));
+            try { saveTasks(); } catch (IOException ignored) {}
         } else {
             throw new DukeException("A todo needs a description. Usage: todo <desc>");
         }
@@ -112,6 +132,7 @@ public class Resonant {
                 throw new DukeException("Deadline description cannot be empty.");
             } else {
                 addTask(new Deadline(desc, by));
+                try { saveTasks(); } catch (IOException ignored) {}
             }
         } else {
             throw new DukeException("Deadline requires a description and '/by'. Usage: deadline <desc> /by <when>");
@@ -135,6 +156,7 @@ public class Resonant {
                     throw new DukeException("Event description cannot be empty.");
                 } else if (!from.isEmpty() && !to.isEmpty()) {
                     addTask(new Event(desc, from, to));
+                    try { saveTasks(); } catch (IOException ignored) {}
                 } else {
                     throw new DukeException("Please provide both start and end times. Example: event project /from Mon 2pm /to 4pm");
                 }
@@ -146,31 +168,33 @@ public class Resonant {
 
     private static void handleMarkUnmark(String indexText, boolean mark) throws DukeException {
         String action = mark ? "mark" : "unmark";
-        if (indexText != null && !indexText.isEmpty()) {
-            int idx;
-            try {
-                idx = Integer.parseInt(indexText);
-            } catch (NumberFormatException e) {
-                throw new DukeException("Task number must be a positive integer. Example: " + action + " 2");
-            }
-
-            if (idx >= 1 && idx <= tasks.size()) {
-                Task t = tasks.get(idx - 1);
-                if (mark) {
-                    t.mark();
-                    box(" Nice! I've marked this task as done:", "   " + t);
-                } else {
-                    t.unmark();
-                    box(" OK, I've marked this task as not done yet:", "   " + t);
-                }
-            } else {
-                throw new DukeException("Task number " + idx + " is out of range. You have " + tasks.size() + " task(s).");
-            }
-        } else {
+        if (indexText == null || indexText.isEmpty()) {
             throw new DukeException("Provide a task number. Usage: " + action + " N");
         }
+
+        int idx;
+        try {
+            idx = Integer.parseInt(indexText);
+        } catch (NumberFormatException e) {
+            throw new DukeException("Task number must be a positive integer. Example: " + action + " 2");
+        }
+
+        if (idx < 1 || idx > taskCount) {
+            throw new DukeException("Task number " + idx + " is out of range. You have " + taskCount + " task(s).");
+        }
+
+        Task t = tasks[idx - 1];
+        if (mark) {
+            t.mark();
+            box(" Nice! I've marked this task as done:", "   " + t);
+        } else {
+            t.unmark();
+            box(" OK, I've marked this task as not done yet:", "   " + t);
+        }
+        try { saveTasks(); } catch (IOException ignored) {}
     }
 
+    // Level 6: Delete
     private static void handleDelete(String indexText) throws DukeException {
         if (indexText == null || indexText.isEmpty()) {
             throw new DukeException("Provide a task number. Usage: delete N");
@@ -183,18 +207,28 @@ public class Resonant {
             throw new DukeException("Task number must be a positive integer. Example: delete 3");
         }
 
-        if (idx < 1 || idx > tasks.size()) {
-            throw new DukeException("Task number " + idx + " is out of range. You have " + tasks.size() + " task(s).");
+        if (idx < 1 || idx > taskCount) {
+            throw new DukeException("Task number " + idx + " is out of range. You have " + taskCount + " task(s).");
         }
 
-        Task removed = tasks.remove(idx - 1);
+        Task removed = tasks[idx - 1];
+
+        // Shift left to fill the gap
+        for (int i = idx; i < taskCount; i++) {
+            tasks[i - 1] = tasks[i];
+        }
+        tasks[--taskCount] = null; // clear last slot
 
         box(
                 " Noted. I've removed this task:",
                 "   " + removed,
-                " Now you have " + tasks.size() + " " + (tasks.size() == 1 ? "task" : "tasks") + " in the list."
+                " Now you have " + taskCount + " " + (taskCount == 1 ? "task" : "tasks") + " in the list."
         );
+
+        try { saveTasks(); } catch (IOException ignored) {}
     }
+
+    // ===== Helpers =====
 
     private static void greet() {
         box(" Hello! I'm Resonant", " What can I do for you?");
@@ -211,23 +245,27 @@ public class Resonant {
         }
     }
 
-    private static void addTask(Task task) {
-        tasks.add(task);
-        box(
-                " Got it. I've added this task:",
-                "   " + task,
-                " Now you have " + tasks.size() + " " + (tasks.size() == 1 ? "task" : "tasks") + " in the list."
-        );
+    private static void addTask(Task task) throws DukeException {
+        if (taskCount >= MAX_TASKS) {
+            throw new DukeException("Your task list is full (100 items). Consider deleting some tasks.");
+        } else {
+            tasks[taskCount++] = task;
+            box(
+                    " Got it. I've added this task:",
+                    "   " + task,
+                    " Now you have " + taskCount + " " + (taskCount == 1 ? "task" : "tasks") + " in the list."
+            );
+        }
     }
 
     private static void printList() {
-        if (tasks.isEmpty()) {
+        if (taskCount == 0) {
             box(" Your list is empty.");
         } else {
             StringBuilder sb = new StringBuilder();
             sb.append(" Here are the tasks in your list:");
-            for (int i = 0; i < tasks.size(); ++i) {
-                sb.append("\n ").append(i + 1).append('.').append(tasks.get(i));
+            for (int i = 0; i < taskCount; ++i) {
+                sb.append('\n').append(' ').append(i + 1).append('.').append(tasks[i]);
             }
             box(sb.toString());
         }
@@ -241,7 +279,111 @@ public class Resonant {
         System.out.println("____________________________________________________________");
     }
 
-    // ===== Data model =====
+    // =========================
+    // Level 7: Save / Load
+    // =========================
+
+    private static void saveTasks() throws IOException {
+        if (Files.notExists(DATA_DIR)) {
+            Files.createDirectories(DATA_DIR);
+        }
+
+        List<String> lines = new ArrayList<>(taskCount);
+        for (int i = 0; i < taskCount; i++) {
+            Task t = tasks[i];
+            boolean done = t.isDone;
+
+            if (t instanceof Todo) {
+                lines.add(String.join(" | ", "T", done ? "1" : "0", t.description));
+            } else if (t instanceof Deadline d) {
+                lines.add(String.join(" | ", "D", done ? "1" : "0", d.description, d.by));
+            } else if (t instanceof Event e) {
+                lines.add(String.join(" | ", "E", done ? "1" : "0", e.description, e.from, e.to));
+            } else {
+                // fallback (shouldn't happen)
+                lines.add(String.join(" | ", "T", done ? "1" : "0", t.description));
+            }
+        }
+
+        Files.write(DATA_FILE, lines, StandardCharsets.UTF_8);
+    }
+
+    private static void loadTasks() throws IOException {
+        if (Files.notExists(DATA_FILE)) {
+            if (Files.notExists(DATA_DIR)) {
+                Files.createDirectories(DATA_DIR);
+            }
+            return; // first run: nothing to load
+        }
+
+        List<String> lines = Files.readAllLines(DATA_FILE, StandardCharsets.UTF_8);
+        taskCount = 0;
+
+        for (String raw : lines) {
+            String line = raw.trim();
+            if (line.isEmpty()) continue;
+
+            // Expected formats:
+            // T | 1 | desc
+            // D | 0 | desc | by
+            // E | 1 | desc | from | to
+            String[] parts = line.split("\\|");
+            if (parts.length < 3) continue; // corrupted, skip
+
+            String type = parts[0].trim();
+            boolean done = "1".equals(parts[1].trim());
+
+            try {
+                switch (type) {
+                    case "T": {
+                        String desc = joinRest(parts, 2);
+                        if (desc.isEmpty()) break;
+                        Task t = new Todo(desc);
+                        if (done) t.mark();
+                        if (taskCount < MAX_TASKS) tasks[taskCount++] = t;
+                        break;
+                    }
+                    case "D": {
+                        if (parts.length < 4) break; // corrupt
+                        String desc = parts[2].trim();
+                        String by = joinRest(parts, 3);
+                        Task t = new Deadline(desc, by);
+                        if (done) t.mark();
+                        if (taskCount < MAX_TASKS) tasks[taskCount++] = t;
+                        break;
+                    }
+                    case "E": {
+                        if (parts.length < 5) break; // corrupt
+                        String desc = parts[2].trim();
+                        String from = parts[3].trim();
+                        String to = joinRest(parts, 4);
+                        Task t = new Event(desc, from, to);
+                        if (done) t.mark();
+                        if (taskCount < MAX_TASKS) tasks[taskCount++] = t;
+                        break;
+                    }
+                    default:
+                        // unknown type — skip
+                }
+            } catch (Exception ignored) {
+                // skip malformed lines gracefully
+            }
+        }
+    }
+
+    private static String joinRest(String[] parts, int start) {
+        // Re-join with " | " to preserve user-entered separators
+        StringBuilder sb = new StringBuilder();
+        for (int i = start; i < parts.length; i++) {
+            if (i > start) sb.append(" | ");
+            sb.append(parts[i].trim());
+        }
+        return sb.toString();
+    }
+
+    // =========================
+    // Data model
+    // =========================
 
     static class Task {
         protected final String description;
@@ -255,9 +397,7 @@ public class Resonant {
         void mark() { this.isDone = true; }
         void unmark() { this.isDone = false; }
 
-        String getStatusIcon() {
-            return this.isDone ? "X" : " ";
-        }
+        String getStatusIcon() { return this.isDone ? "X" : " "; }
 
         @Override
         public String toString() {
@@ -269,9 +409,7 @@ public class Resonant {
         Todo(String description) { super(description); }
 
         @Override
-        public String toString() {
-            return "[T]" + super.toString();
-        }
+        public String toString() { return "[T]" + super.toString(); }
     }
 
     static class Deadline extends Task {
