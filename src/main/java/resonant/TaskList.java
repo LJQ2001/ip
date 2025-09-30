@@ -38,5 +38,16 @@ public class TaskList {
         return t;
     }
 
+    public List<Task> find(String keyword) {
+        String kw = keyword.toLowerCase();
+        List<Task> out = new ArrayList<>();
+        for (Task t : tasks) {
+            if (t.description().toLowerCase().contains(kw)) {
+                out.add(t);
+            }
+        }
+        return out;
+    }
+
     public List<Task> asList() { return Collections.unmodifiableList(tasks); }
 }

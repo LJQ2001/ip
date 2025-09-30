@@ -11,6 +11,7 @@ public class Parser {
     private static final String CMD_DEADLINE = "deadline ";
     private static final String CMD_EVENT = "event ";
     private static final String CMD_DELETE = "delete ";
+    private static final String CMD_FIND = "find ";
 
     private static final String KW_BY = "/by";
     private static final String KW_FROM = "/from";
@@ -50,6 +51,11 @@ public class Parser {
             return new AddEventCommand(fromSplit[0], toSplit[0], toSplit[1]);
         }
 
+        if (input.startsWith(CMD_FIND)) {
+            String kw = input.substring(CMD_FIND.length()).trim();
+            return new FindCommand(kw);
+        }
+
         throw unknown(input);
     }
 
@@ -58,7 +64,7 @@ public class Parser {
         return new DukeException(
                 "I don’t recognise that command" + unknown + ".\n" +
                         "Try: list | todo <desc> | deadline <desc> /by <when> | " +
-                        "event <desc> /from <start> /to <end> | mark N | unmark N | delete N | bye"
+                        "event <desc> /from <start> /to <end> | mark N | unmark N | delete N | find <keyword> | bye"
         );
     }
 
