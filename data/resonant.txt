@@ -1,6 +1,4 @@
 T | 0 | read book
-E | 1 | project meeting | Aug 6th 2pm | 4pm
-D | 0 | cake | june 15
 T | 0 | cooking
 D | 0 | assignment | choclate
-E | 0 | exam | monday 6pm | 9pm
+E | 1 | exam | monday 6pm | 9pm
