@@ -16,6 +16,16 @@ public class Ui {
     /** Scanner used to read user input from standard input (System.in). */
     private final Scanner scanner;
 
+    private static final String LOGO =
+            " ____                                     \n"
+                    + "|  _ \\ ___  ___  ___  _ __   __ _ _ __   \n"
+                    + "| |_) / _ \\/ __|/ _ \\| '_ \\ / _` | '_ \\  \n"
+                    + "|  _ <  __/\\__ \\ |_|  /| | | | (_| | | | | \n"
+                    + "|_| \\_\\___||___/\\___||_| |_|\\__,_|_| |_| T\n";
+
+
+
+
     /**
      * Constructs a {@code Ui} object and initializes the input scanner.
      */
@@ -30,6 +40,7 @@ public class Ui {
      * </p>
      */
     public void showWelcome() {
+        System.out.println(LOGO);
         box(" Hello! I'm Resonant", " What can I do for you?");
     }
 
