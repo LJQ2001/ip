@@ -44,7 +44,7 @@ bye
 
 1. Ensure you have Java 17 or above installed in your Computer.
 
-2. Download the latest .jar file from 
+2. Download the latest .jar file from https://github.com/LJQ2001/ip/releases/tag/A-release
 
 3. opy the file to the folder you want to use as the home folder for Resonant.
 
